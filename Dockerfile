@@ -1,0 +1,20 @@
+FROM golang:1.22.12-alpine AS builder
+WORKDIR /src
+COPY go.mod ./
+COPY *.go ./
+COPY web ./web
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/atiaatashin .
+
+FROM alpine:3.22
+RUN apk add --no-cache ca-certificates curl tar gzip tzdata
+WORKDIR /app
+# Fixed official engine version; fail closed if the archive digest differs.
+RUN curl -fL --retry 3 https://github.com/MHSanaei/3x-ui/releases/download/v3.8.5/x-ui-linux-amd64.tar.gz -o /tmp/engine.tar.gz \
+    && echo '6a85c110a04a727613c933c54ae602b8d37dab8876c6e20a6d46623010dd9d3c  /tmp/engine.tar.gz' | sha256sum -c - \
+    && tar --no-same-owner -xzf /tmp/engine.tar.gz -C /app \
+    && rm /tmp/engine.tar.gz
+COPY --from=builder /out/atiaatashin /usr/local/bin/atiaatashin
+ENV PORT=8080 ATIA_ENGINE_DIR=/app/x-ui ATIA_DATA_DIR=/data
+EXPOSE 8080
+VOLUME ["/data"]
+CMD ["/usr/local/bin/atiaatashin"]
